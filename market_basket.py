@@ -21,8 +21,6 @@ more general items (product categories, sku only)
 ---
 Pandas \\
 Numpy \\
-Pyplot \\
-Seaborn \\
 Apriori \\
 Plotly \\
 Networkx \\
@@ -297,13 +295,15 @@ with cA:
     price_step = st.number_input('Step for basket price:', 100, 10000, 1000)
     garage_type = st.selectbox(
         label = 'Select considered garages:',
-        options =('All','Rapide', 'Non-Rapide', 'Non-B2C'))
+        options =('All','Rapide', 'Non-Rapide', 'Non-B2C', 'B2C'))
     if garage_type =='Non-Rapide':
       df_raw = df_raw.loc[df_raw['garage_type'] != 'rapide_service_center' ]
     elif garage_type == 'Rapide':
       df_raw = df_raw.loc[df_raw['garage_type'] == 'rapide_service_center' ]
     elif garage_type == 'Non-B2C':
       df_raw = df_raw.loc[~df_raw['garage_type'].isin(['rapide_service_center','B2C'])]
+    elif garage_type == 'B2C':
+      df_raw = df_raw.loc[df_raw['garage_type']== 'Inactive']
     if st.button("Reset Data"):
         st.experimental_memo.clear()
         df_raw = pd.DataFrame()
@@ -316,26 +316,19 @@ with cD:
 with cE:
     hist(df_raw, is_prob=='Probability', False,step = price_step)
 
-df_data = df_raw.loc[df_raw['GarageId'] != 25]
-transaction_id = 'id'
-segmentation = 'brand_category' #Possible entries: ['product_desc','brand','category_name','brand_category']
-itemsB2C, rulesB2C = find_rules(df_data, transaction_id, segmentation, 2)
-df_summary = pd.DataFrame()
-#df_summary[['B2C rule count', 'B2C mean']] = rulesB2C.describe().transpose()[['count','mean']]
+# df_data = df_raw.loc[df_raw['GarageId'] != 25]
+# transaction_id = 'id'
+# segmentation = 'brand_category' #Possible entries: ['product_desc','brand','category_name','brand_category']
 
-df_data = df_raw.loc[df_raw['GarageId'] == 25]
-itemsB2B, rulesB2B = find_rules(df_data, transaction_id, segmentation, 2)
-#df_summary[['B2B rule count', 'B2B mean']] = rulesB2B.describe().transpose()[['count','mean']]
+# itemsAll, rulesAll = find_rules(df_raw, transaction_id, segmentation, 2)
+# #df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
 
-itemsAll, rulesAll = find_rules(df_raw, transaction_id, segmentation, 2)
-#df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
-
-df_summary=pd.DataFrame()
-itemsAll, rulesAll = find_rules(df_raw, 'id', 'brand', 2)
-#df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
+# df_summary=pd.DataFrame()
+# itemsAll, rulesAll = find_rules(df_raw, 'id', 'brand', 2)
+# #df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
 
 
-selection = rulesAll.columns
+
 
 
 cF, cG= st.columns([1,5])
@@ -344,7 +337,8 @@ with cF:
     s_segmentation = segment_dict_[segmentation]
     clean = st.checkbox('Clean network plot ', value=False)
 
-itemsAll, rulesAll = find_rules(df_raw, 'id', s_segmentation, 2)    
+itemsAll, rulesAll = find_rules(df_raw, 'id', s_segmentation, 2) 
+selection = rulesAll.columns   
 with cG:
     heatmap_ac(rulesAll)
 
