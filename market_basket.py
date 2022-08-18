@@ -21,6 +21,8 @@ more general items (product categories, sku only)
 ---
 Pandas \\
 Numpy \\
+Pyplot \\
+Seaborn \\
 Apriori \\
 Plotly \\
 Networkx \\
@@ -301,35 +303,20 @@ with cA:
     elif garage_type == 'Rapide':
       df_raw = df_raw.loc[df_raw['garage_type'] == 'rapide_service_center' ]
     elif garage_type == 'Non-B2C':
-      df_raw = df_raw.loc[~df_raw['garage_type'].isin(['rapide_service_center','B2C'])]
+      df_raw = df_raw.loc[~df_raw['garage_type'].isin(['rapide_service_center','Inactive'])]
     elif garage_type == 'B2C':
       df_raw = df_raw.loc[df_raw['garage_type']== 'Inactive']
     if st.button("Reset Data"):
         st.experimental_memo.clear()
         df_raw = pd.DataFrame()
 with cB:
-    bar_hist(df_raw,segment_dict_[seg], True,'id')
+    bar_hist(df_raw,segment_dict_[seg], is_prob=='Probability','id')
     
 cD, cE = st.columns([1,1])
 with cD:
     hist(df_raw, is_prob=='Probability', True,step = count_step)
 with cE:
     hist(df_raw, is_prob=='Probability', False,step = price_step)
-
-# df_data = df_raw.loc[df_raw['GarageId'] != 25]
-# transaction_id = 'id'
-# segmentation = 'brand_category' #Possible entries: ['product_desc','brand','category_name','brand_category']
-
-# itemsAll, rulesAll = find_rules(df_raw, transaction_id, segmentation, 2)
-# #df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
-
-# df_summary=pd.DataFrame()
-# itemsAll, rulesAll = find_rules(df_raw, 'id', 'brand', 2)
-# #df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
-
-
-
-
 
 cF, cG= st.columns([1,5])
 with cF:
@@ -356,4 +343,3 @@ with cJ:
 cK, cL, cM = st.columns([3,5,3])
 with cL:
     basket_network_plot(rulesAll, 'Product Associations', clean)
-
