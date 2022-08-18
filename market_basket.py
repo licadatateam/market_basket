@@ -55,7 +55,6 @@ def find_rules(df_temp, transaction_id, segmentation, min_s = 10, disp = False,q
   basket_items = (df_basket_items.notnull()).astype('bool')
   frequent_itemsets = apriori(basket_items, min_support= min_s/100, use_colnames=True, max_len = 5)
   rules = association_rules(frequent_itemsets, metric="leverage",  min_threshold = 0)
-  print("Rules identified: ", len(rules))
   rules["antecedents"] = rules["antecedents"].apply(lambda x: ', '.join(list(x))).astype("unicode")
   rules["consequents"] = rules["consequents"].apply(lambda x: ', '.join(list(x))).astype("unicode")
   rules['hover_name'] = rules['antecedents'] +"\u2192" + rules['consequents']
@@ -279,7 +278,6 @@ def gather_data():
     df_raw.category_name.sort_values().unique()
     return df_raw
 
-
 df_raw = gather_data()
 segments = ['Brand','Category','Category_Brand','SKU']
 segments_ = ['product_desc','brand','category_name','brand_category']
@@ -297,6 +295,15 @@ with cA:
     is_prob = st.radio("Data presentation: ", ('Probability','Actual Count'),  horizontal=True)
     count_step = st.number_input('Step for basket count:', 1, 100, 1)
     price_step = st.number_input('Step for basket price:', 100, 10000, 1000)
+    garage_type = st.selectbox(
+        label = 'Select considered garages:',
+        options =('All','Rapide', 'Non-Rapide', 'Non-B2C'))
+    if garage_type =='Non-Rapide':
+      df_raw = df_raw.loc[df_raw['garage_type'] != 'rapide_service_center' ]
+    elif garage_type == 'Rapide':
+      df_raw = df_raw.loc[df_raw['garage_type'] == 'rapide_service_center' ]
+    elif garage_type == 'Non-B2C':
+      df_raw = df_raw.loc[~df_raw['garage_type'].isin(['rapide_service_center','B2C'])]
     if st.button("Reset Data"):
         st.experimental_memo.clear()
         df_raw = pd.DataFrame()
@@ -314,18 +321,18 @@ transaction_id = 'id'
 segmentation = 'brand_category' #Possible entries: ['product_desc','brand','category_name','brand_category']
 itemsB2C, rulesB2C = find_rules(df_data, transaction_id, segmentation, 2)
 df_summary = pd.DataFrame()
-df_summary[['B2C rule count', 'B2C mean']] = rulesB2C.describe().transpose()[['count','mean']]
+#df_summary[['B2C rule count', 'B2C mean']] = rulesB2C.describe().transpose()[['count','mean']]
 
 df_data = df_raw.loc[df_raw['GarageId'] == 25]
 itemsB2B, rulesB2B = find_rules(df_data, transaction_id, segmentation, 2)
-df_summary[['B2B rule count', 'B2B mean']] = rulesB2B.describe().transpose()[['count','mean']]
+#df_summary[['B2B rule count', 'B2B mean']] = rulesB2B.describe().transpose()[['count','mean']]
 
 itemsAll, rulesAll = find_rules(df_raw, transaction_id, segmentation, 2)
-df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
+#df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
 
 df_summary=pd.DataFrame()
 itemsAll, rulesAll = find_rules(df_raw, 'id', 'brand', 2)
-df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
+#df_summary[['All rule count', 'All mean']] = rulesAll.describe().transpose()[['count','mean']]
 
 
 selection = rulesAll.columns
