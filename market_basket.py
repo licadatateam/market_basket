@@ -48,6 +48,37 @@ st.set_page_config(layout="wide",
 
 st.title("""**Market Basket Analysis**""")
 
+category_dict = {"bulbs":"Accessories","car care combiset":"Accessories","early warning device":"Accessories",
+              "universal horn": "Accessories","wipers":"Accessories","air filter":"Air Induction & Exhaust",
+              "cabin filter or aircon filter":"Air Induction & Exhaust","brake drum":"Brakes System",
+              "brake fluid":"Brakes System","brake fluid dot 4":"Brakes System",
+              "brake pads":"Brakes System","brake parts cleaner":"Brakes System",
+              "brake paste":"Brakes System","brake shoe":"Brakes System",
+              "rotor disc":"Brakes System","adhesive and silicone": "Various Chemicals",
+              "alternator belt":"Engine System","atf": "Engine System",
+              "axle oil":"Engine System","ball joint assembly": "Suspension System",
+              "battery": "Ignition System","center link assembly":"Suspension System",
+              "coolant": "Engine System","cvt": "Engine System","cvtf":"Engine System",
+              "drive belt":"Engine System","engine flush": "Engine System","engine oil": "Engine System",
+              "fan belt": "Engine System","fuel filter":"Fuel System","gear oil": "Engine System",
+              "glow plug":"Ignition System","grease":"Engine System","idler arm assembly":"Suspension System",
+              "lubricant or cleaner":"Various Chemicals","lubrication system":"Lubrication System",
+              "motor assembly":"Cooling System","oil filter":"Lubrication System",
+              "pitman arm assembly":"Suspension System","power steering belt":"Engine System",
+              "power steering fluid":"Engine System","sealant":"Various Chemicals",
+              "shock absorber":"Suspension System","shock mounting":"Suspension System",
+              "silicone spray":"Various Chemicals","spark plugs":"Ignition System",
+              "stabilizer link or rod":"Suspension System","steering rack end":"Suspension System",
+              "tie rod end":"Suspension System","timing belt":"Engine System",
+              "transmission fluid":"Engine System", "clutch disc":"Transmission System"
+              }
+to_fix_category_name = {"Vortex": "engine oil","VortexPlus": "engine oil", "Powerplus":"brake drum",
+                        "Aisin":"clutch disc","Federal":"ball joint assembly","Shell":"engine oil","Kia":"brake parts cleaner",
+                        "Wiper":"wipers","Bendix":"brake fluid","Oem":"car care combiset",
+                        "ACDelco":"engine oil","Usa":"engine oil"}
+to_fix_brand= { "Vortex":"Vortex Plus", "VortexPlus":"Vortex Plus", "Wiper":"ACDelco",
+               "Oem":"OEM Engineering","Usa":"USA88", "Powerplus":"Power Plus","Federal":"Federal Mogul"}
+
 def find_rules(df_temp, transaction_id, segmentation, min_s = 10, disp = False,quantity = 'quantity'):
   df_basket = pd.DataFrame()
   df_basket = df_temp[[transaction_id, segmentation, quantity]].copy()
@@ -86,8 +117,6 @@ def bar_hist(df_test, seg, prob, cat = 'id'):
   fig.update_yaxes(title_text = ya_text,showline=True, linewidth=1, linecolor='black', mirror=True, ticks ='inside',range = [0,df.max()*1.1])
   fig.update_xaxes(title_text = seg,showline=True, linewidth=1, linecolor='black', ticks ='',mirror=True,range = [-0.5,9.5], rangeslider=dict(visible=True),showticklabels=False)
   st.plotly_chart(fig)
-
-
 
 def hist(df_test, is_prob = True, is_count = True, step = 1):
   df_data=pd.DataFrame()
@@ -133,8 +162,9 @@ def heatmap_ac(rulesAll):
   df_heatmap = rulesAll.groupby(['antecedents', 'consequents'])['support'].apply(lambda x: round(x.unique().item()*100,2)).fillna(0).unstack(1).reset_index().set_index('antecedents')
   df_heatmap_ = rulesAll.groupby(['antecedents', 'consequents'])['support'].apply(lambda x: round(x.unique().item()*100,2)).fillna(0).unstack(1).reset_index().set_index('antecedents')
   df__ = df_to_plotly(df_heatmap)
-
+  
   fig = go.Figure()
+  
   fig.add_trace(go.Heatmap(df__,
                   text = df_heatmap_.fillna("0"),
                   texttemplate="%{text}",
@@ -147,6 +177,7 @@ def heatmap_ac(rulesAll):
 
 def xy_scatter(df_temp,segment, item_x,item_y, set_vis=True):
   df_temp = df_temp.set_index('hover_name')
+  df_temp[['support','antecedent support','consequent support','confidence']] =df_temp[['support','antecedent support','consequent support','confidence']].apply(lambda x:x*100) 
   colors = cycle(plotly.colors.sequential.Viridis)
   fig = go.Figure()
   for seg in df_temp[segment].unique():
@@ -266,19 +297,124 @@ def basket_network_plot(rules, plot_title = 'Insert Plot Title', clean = False):
                   )
   st.plotly_chart(fig)
 
+def merged_rules(df_temp):
+    AllRules = pd.DataFrame()
+    segmentation = ['product_desc','brand','product_category','brand_category']
+    for segment in segmentation:
+      rules =pd.DataFrame()
+      itemsAll, rules = find_rules(df_temp, 'id', segment, 2)
+      AllRules = pd.concat([AllRules,rules],axis=0)
+    AllRules.loc[:,'antecedents'] = AllRules.loc[:,'antecedents'].apply(lambda x: ', '.join(sorted(x.split(', '))))
+    return AllRules
+
+def find_suggestions(df, item,confidence,support):
+  if (df==item).any().sum()>0:
+    seg = (df==item).any()[(df==item).any()==True].index[0]
+    sugg_list = df.loc[df[seg]==item].sort_values(by = 'percentage',ascending = False)
+    sugg_list = sugg_list[['product_desc',seg,'percentage']]
+    sugg_list.columns = ['SKU',seg,'percentage']
+    sugg_list.loc[:,'confidence'] = confidence
+    sugg_list.loc[:,'support'] = support
+    return sugg_list
+  else:
+    return pd.DataFrame()
+
+def matching_sequence(df_p, rules,input_list):  
+  available_sugg = []
+  corr_sugg = []
+  df_match = pd.DataFrame()
+  matching_df = pd.DataFrame()
+  suggestion_data = pd.DataFrame()
+  product_category_sugg = pd.DataFrame()
+  brand_category_sugg = pd.DataFrame()
+  brand_sugg = pd.DataFrame()
+  SKU_sugg = pd.DataFrame()
+  ldata = [pd.DataFrame(),pd.DataFrame(),pd.DataFrame(),pd.DataFrame(),pd.DataFrame(),pd.DataFrame(),pd.DataFrame()]
+  for sku in input_list:
+    df_match = df_p.loc[df_p['product_desc'].isin(input_list)]
+  matching_df.loc['product_desc','match'] = ', '.join(df_match['product_desc'].sort_values().unique())
+  matching_df.loc['brand'] = ', '.join(df_match['brand'].sort_values().unique())
+  matching_df.loc['product_category'] = ', '.join(df_match['product_category'].sort_values().unique())
+  matching_df.loc['brand_category'] = ', '.join(df_match['brand_category'].sort_values().unique())
+  matching_df = matching_df.transpose()
+  mdf = matching_df.values
+  consequents_df = rules.loc[rules['antecedents'].isin(list(mdf[0]))].sort_values(by='confidence', ascending = False)
+  for item in consequents_df['consequents'].unique():
+    confidence = round(consequents_df.loc[consequents_df['consequents']==item,'confidence'].item()*100,2)
+    support =round(consequents_df.loc[consequents_df['consequents']==item,'support'].item()*100,2)
+    suggestions = find_suggestions(df_p, item, confidence,support)
+    if len(suggestions)>0:
+      suggestion_data = pd.concat([suggestion_data,suggestions])
+  not_req = ['SKU','percentage','confidence','support']
+  cols = suggestion_data.columns
+  lmask = ~pd.Series(cols).isin(not_req)
+  for i in range(len(cols)):
+    if lmask[i]:
+      ldata[i] = suggestion_data.groupby(cols[i],as_index=False).first().sort_values(by='confidence', ascending=False).set_index('SKU').dropna(axis=1)
+  for df in ldata:
+    if len(df) >0:
+      available_sugg.append(df.columns[0])
+      corr_sugg.append(df)
+  if 'product_desc' in available_sugg:
+    SKU_sugg = corr_sugg[available_sugg.index('product_desc')]
+  if 'brand' in available_sugg:
+    brand_sugg = corr_sugg[available_sugg.index('brand')]
+  if 'brand_category' in available_sugg:
+    brand_category_sugg = corr_sugg[available_sugg.index('brand_category')]
+  if 'product_category' in available_sugg:
+    product_category_sugg = corr_sugg[available_sugg.index('product_category')]
+
+  return SKU_sugg,brand_sugg,brand_category_sugg,product_category_sugg
+
+def scatter_explore():
+  fig = go.Figure()
+  fig.add_trace(
+      go.Scatter(x = df_explore['count'],
+                y = df_explore['total_cost'],
+                mode = 'markers',
+                hovertext = df_explore['id'].astype(str) #+'\n'+df_explore['items']
+                )
+  )
+  fig.update_xaxes(title_text = 'Basket Count',showline=True, linewidth=1, linecolor='black', mirror=True, range = [0,df_explore['count'].max()*1.1])
+  fig.update_yaxes(title_text = 'Basket Price',showline=True, linewidth=1, linecolor='black', mirror=True,range = [0,df_explore['total_cost'].max()*1.1])
+  fig.update_layout(template = 'simple_white')
+  st.plotly_chart(fig)
+
 @st.experimental_memo()
 def gather_data():
     df_raw = pd.read_csv("http://app.redash.licagroup.ph/api/queries/118/results.csv?api_key=nVfPq3pxbOF6uSWOlCI8HQSRmgMb34OD6tWvrapY", parse_dates = ['created_at'])
     df_raw = df_raw.loc[df_raw['quantity']>0]
-    df_raw = df_raw.loc[:,['id', 'GarageId','product_desc', 'garage_type', 'brand', 'category_name','quantity','price']]
+    df_raw = df_raw.loc[:,['id', 'created_at','GarageId','product_desc', 'garage_type', 'brand', 'category_name','quantity','price']]
+    df_raw.columns = ['id', 'date','garage_id','product_desc', 'garage_type', 'brand', 'category_name','quantity','price']
     df_raw = df_raw.loc[df_raw['price']>0]
-    df_raw['brand_category'] = [str(x) + ' '+str(y).title() for (x,y) in zip(df_raw['brand'], df_raw['category_name'])]
+    df_raw.loc[df_raw.category_name.isnull(),'brand'] = df_raw.loc[:,'product_desc'].apply(lambda x:x.split(" ")[0])
+    df_raw.loc[df_raw.category_name.isnull(),'category_name'] = df_raw.loc[df_raw.category_name.isnull(),'brand'].apply(lambda x: to_fix_category_name[x])
+    df_raw.loc[df_raw['brand'].isin(list(to_fix_brand.keys())),'brand'] = df_raw.loc[df_raw['brand'].isin(list(to_fix_brand.keys())),'brand'].apply(lambda x: to_fix_brand[x])
+    df_raw['product_category'] = df_raw['category_name'].apply(lambda x: category_dict[x])
+    df_raw['category_name'] = df_raw['product_category']
+    df_raw['brand_category'] = [str(x) + ' '+str(y).title() for (x,y) in zip(df_raw['brand'], df_raw['product_category'])]
     df_raw['cost'] = df_raw['quantity']*df_raw['price']
-    df_raw = df_raw.dropna()
-    df_raw.category_name.sort_values().unique()
-    return df_raw
+    
+    df_product = pd.DataFrame()
+    df_product = df_raw.loc[:,['brand','product_desc','product_category','brand_category']].groupby('product_desc', as_index=False).first()
+    df_product = df_product.sort_values(by=['brand','product_desc'],ascending = [True, True]).set_index('product_desc')
+    df_product['item_count'] = df_raw.groupby('product_desc')['quantity'].sum()
+    df_product['percentage'] = 100*df_product['item_count']/df_product['item_count'].sum()
+    df_product = df_product.reset_index()
+    
+    
+    return df_raw, df_product
 
-df_raw = gather_data()
+def exploration_data(df_raw):
+    df_explore = df_raw.groupby('id').agg(count = ('quantity', lambda x: x.sum()),
+                         total_cost = ('cost',lambda x: round(x.sum(),2)),
+                         items = ('product_desc',lambda x: ', '.join(x.unique()))).reset_index()
+    return df_explore
+
+df_raw, df_product = gather_data()
+
+
+
 segments = ['Brand','Category','Category_Brand','SKU']
 segments_ = ['product_desc','brand','category_name','brand_category']
 segment_dict = {'product_desc':'SKU',
@@ -290,12 +426,10 @@ segment_dict_ = {v: k for k, v in segment_dict.items()}
 st.header('Data Exploration')
 cA, cB = st.columns([1,3])
 with cA:
-    st.header("Controls")
+    st.markdown("#### Controls")
     seg = st.selectbox('Select Segmentation', segments)
     is_prob = st.radio("Data presentation: ", ('Probability','Actual Count'),  horizontal=True)
-    count_step = st.number_input('Step for basket count:', 1, 100, 1)
-    price_step = st.number_input('Step for basket price:', 100, 10000, 1000)
-    garage_type = st.selectbox(
+    garage_type = st.sidebar.selectbox(
         label = 'Select considered garages:',
         options =('All','Rapide', 'Non-Rapide', 'Non-B2C', 'B2C'))
     if garage_type =='Non-Rapide':
@@ -306,7 +440,7 @@ with cA:
       df_raw = df_raw.loc[~df_raw['garage_type'].isin(['rapide_service_center','Inactive'])]
     elif garage_type == 'B2C':
       df_raw = df_raw.loc[df_raw['garage_type']== 'Inactive']
-    if st.button("Reset Data"):
+    if st.sidebar.button("Reset Data"):
         st.experimental_memo.clear()
         df_raw = pd.DataFrame()
 with cB:
@@ -314,18 +448,31 @@ with cB:
     
 cD, cE = st.columns([1,1])
 with cD:
+    count_step = st.number_input('Step for basket count:', 1, 100, 1)
     hist(df_raw, is_prob=='Probability', True,step = count_step)
 with cE:
+    price_step = st.number_input('Step for basket price:', 100, 10000, 1000)
     hist(df_raw, is_prob=='Probability', False,step = price_step)
 
-cF, cG= st.columns([1,5])
-with cF:
-    segmentation = st.selectbox('Select Segmentation:', segments)
-    s_segmentation = segment_dict_[segmentation]
-    clean = st.checkbox('Clean network plot ', value=False)
+st.markdown("""#### Basket Budget""")   
+Ec, Fc, Gc = st.columns([1,5,1]) 
+with Fc:
+    df_explore = exploration_data(df_raw)
+    scatter_explore()
 
+
+
+st.header('Market Basket Association Analysis')
+cF, cG, cF2= st.columns([1,5,1])
+st.sidebar.markdown("""---""")
+st.sidebar.markdown("""Market Basket Analysis Controls""")
+segmentation = st.sidebar.selectbox('Select Segmentation:', segments)
+clean = st.sidebar.checkbox('Clean network plot ', value=False)
+
+s_segmentation = segment_dict_[segmentation]   
 itemsAll, rulesAll = find_rules(df_raw, 'id', s_segmentation, 2) 
 selection = rulesAll.columns   
+
 with cG:
     heatmap_ac(rulesAll)
 
@@ -340,6 +487,65 @@ with cJ:
     filter_network = rulesAll['antecedents'].unique()
     s_filter = item_x = st.selectbox('x-axis', filter_network, index = 0)
     basket_network_plot(rulesAll.loc[rulesAll['antecedents']==s_filter], 'Category Association',clean) #.str.contains('NGK',na=False)
+
+AllRules = merged_rules(df_raw)
 cK, cL, cM = st.columns([3,5,3])
 with cL:
-    basket_network_plot(rulesAll, 'Product Associations', clean)
+    basket_network_plot(AllRules, 'Product Associations', clean)
+
+st.header("Market Basket Simulation")
+
+def show_metric(df):
+    if len(df)>0:
+        df = df.reset_index()
+        for sku in df['SKU']:
+            st.metric(label = df.columns[1],value = sku,delta = "Confidence: "+str(df.loc[df['SKU']==sku,'confidence'].item())+"%")
+    else:
+        st.caption('No suggestions for this section.')
+
+input_list = st.multiselect('Basket items:',options = df_product['product_desc'].unique())
+if len(input_list)> 0:
+    cs,cN,cO,cs = st.columns([1,3,7,1])
+    SKU_sugg, brand_sugg, brand_category_sugg, product_category_sugg=matching_sequence(df_product, AllRules,input_list)
+    with cN:
+        #st.write(pd.DataFrame(input_list,columns=['Item']).merge(df_product.iloc[:,:3], left_on ='Item', right_on='product_desc',how='inner').drop('product_desc', axis=1))
+        st.markdown("#### Selected Items:")
+        st.markdown("""---""")
+        for item in input_list:
+            st.markdown(f"""
+                        - **{item}**
+                        """)
+        st.markdown("""---""")
+    with cO:
+        t1, t2, t3, t4, t5 = st.tabs(["All","By SKU", "By Brand/Category", "By Product Category","By Brand"])
+        with t1:
+            st.markdown("""##### Suggestions based on SKU.""")
+            show_metric(SKU_sugg)
+            st.write("""---""")
+            st.markdown("""##### Suggestions based on brand/category.""")
+            show_metric(brand_category_sugg)
+            st.write("""---""")
+            st.markdown("""##### Suggestions based on product category.""")
+            show_metric(product_category_sugg)
+            st.write("""---""")
+            st.markdown("""##### Suggestions based on brand.""")
+            show_metric(brand_sugg)
+        with t2:
+            st.markdown("""##### Suggestions based on SKU.""")
+            st.write("""---""")
+            show_metric(SKU_sugg)
+        with t3:
+            st.markdown("""##### Suggestions based on brand/category.""")
+            st.write("""---""")
+            show_metric(brand_category_sugg)
+        with t4:
+            st.markdown("""##### Suggestions based on product category.""")
+            st.write("""---""")
+            show_metric(product_category_sugg)
+        with t5:
+            st.markdown("""##### Suggestions based on brand.""")
+            st.write("""---""")
+            show_metric(brand_sugg)
+            
+else:
+    st.info('Start Shopping Now!')
