@@ -36,6 +36,7 @@ import plotly
 import math
 from itertools import cycle
 import streamlit as st
+from io import BytesIO
 
 st.set_page_config(layout="wide",
                     page_title='Market Basket Analysis',
@@ -79,6 +80,10 @@ to_fix_category_name = {"Vortex": "engine oil","VortexPlus": "engine oil", "Powe
 to_fix_brand= { "Vortex":"Vortex Plus", "VortexPlus":"Vortex Plus", "Wiper":"ACDelco",
                "Oem":"OEM Engineering","Usa":"USA88", "Powerplus":"Power Plus","Federal":"Federal Mogul"}
 
+def convert_df(df):
+     # IMPORTANT: Cache the conversion to prevent computation on every rerun
+     return df.to_csv().encode('utf-8')
+
 def find_rules(df_temp, transaction_id, segmentation, min_s = 10, disp = False,quantity = 'quantity'):
   df_basket = pd.DataFrame()
   df_basket = df_temp[[transaction_id, segmentation, quantity]].copy()
@@ -117,6 +122,7 @@ def bar_hist(df_test, seg, prob, cat = 'id'):
   fig.update_yaxes(title_text = ya_text,showline=True, linewidth=1, linecolor='black', mirror=True, ticks ='inside',range = [0,df.max()*1.1])
   fig.update_xaxes(title_text = seg,showline=True, linewidth=1, linecolor='black', ticks ='',mirror=True,range = [-0.5,9.5], rangeslider=dict(visible=True),showticklabels=False)
   st.plotly_chart(fig)
+  return df
 
 def hist(df_test, is_prob = True, is_count = True, step = 1):
   df_data=pd.DataFrame()
@@ -159,8 +165,8 @@ def df_to_plotly(df):
             'x': df.columns.tolist(),
             'y': df.index.tolist()}
 def heatmap_ac(rulesAll):
-  df_heatmap = rulesAll.groupby(['antecedents', 'consequents'])['support'].apply(lambda x: round(x.unique().item()*100,2)).fillna(0).unstack(1).reset_index().set_index('antecedents')
-  df_heatmap_ = rulesAll.groupby(['antecedents', 'consequents'])['support'].apply(lambda x: round(x.unique().item()*100,2)).fillna(0).unstack(1).reset_index().set_index('antecedents')
+  df_heatmap = rulesAll.groupby(['antecedents', 'consequents'])['confidence'].apply(lambda x: round(x.unique().item()*100,2)).fillna(0).unstack(1).reset_index().set_index('antecedents')
+  df_heatmap_ = rulesAll.groupby(['antecedents', 'consequents'])['confidence'].apply(lambda x: round(x.unique().item()*100,2)).fillna(0).unstack(1).reset_index().set_index('antecedents')
   df__ = df_to_plotly(df_heatmap)
   
   fig = go.Figure()
@@ -443,9 +449,10 @@ with cA:
     if st.sidebar.button("Reset Data"):
         st.experimental_memo.clear()
         df_raw = pd.DataFrame()
+    df_raw_=df_raw.copy()
 with cB:
-    bar_hist(df_raw,segment_dict_[seg], is_prob=='Probability','id')
-    
+    df_out_ = bar_hist(df_raw,segment_dict_[seg], is_prob=='Probability','id')
+
 cD, cE = st.columns([1,1])
 with cD:
     count_step = st.number_input('Step for basket count:', 1, 100, 1)
@@ -458,6 +465,7 @@ st.markdown("""#### Basket Budget""")
 Ec, Fc, Gc = st.columns([1,5,1]) 
 with Fc:
     df_explore = exploration_data(df_raw)
+
     scatter_explore()
 
 
@@ -474,7 +482,12 @@ itemsAll, rulesAll = find_rules(df_raw, 'id', s_segmentation, 2)
 selection = rulesAll.columns   
 
 with cG:
-    heatmap_ac(rulesAll)
+    st.write(rulesAll)
+    if len(rulesAll)>0:
+        heatmap_ac(rulesAll)
+
+    else:
+        st.markdown("""### No product associations have been established based on segment.""")
 
 set_vis = True
 segment = 'antecedent'
@@ -549,3 +562,60 @@ if len(input_list)> 0:
             
 else:
     st.info('Start Shopping Now!')
+
+df_out_ = df_out_.to_frame('count/probability')
+csv_save_ = convert_df(df_out_)
+st.sidebar.download_button(
+                    label="data_exploration.csv",
+                    data=csv_save_,
+                    file_name='data_exploration.csv',
+                    mime='text/csv'
+                    )
+
+csv_save__ = convert_df(df_explore)
+st.sidebar.download_button(
+                    label="basket_budget.csv",
+                    data=csv_save__,
+                    file_name='basket_budget.csv',
+                    mime='text/csv'
+                    )
+
+csv_save = convert_df(rulesAll)
+st.sidebar.download_button(
+                    label="heatmap_data.csv",
+                    data=csv_save,
+                    file_name='heatmap_data.csv',
+                    mime='text/csv'
+                    )
+
+# st.header("Download data")
+# def extract_data(df):
+#     output = BytesIO()
+#     writer = pd.ExcelWriter(output, engine='xlsxwriter')
+#     df_SKU = find_rules(df, 'id', 'product_desc', 2)
+    
+#     df_product_category = find_rules(df, 'id', 'product_category', 2) 
+    
+#     df_brand_category = find_rules(df, 'id', 'brand_category', 2) 
+#     df_brand = find_rules(df, 'id', 'brand', 2) 
+#     df_brand.to_excel(writer, index=False, sheet_name='by_brand')
+#     st.write('1')
+#     df_product_category.to_excel(writer, index=False, sheet_name='by_product_category')
+#     st.write('2')
+#     df_brand_category.to_excel(writer, index=False, sheet_name='by_brand_category')
+#     st.write('3')
+#     df_SKU.to_excel(writer, index=False, sheet_name='by_SKU') 
+#     st.write('4')
+#     workbook = writer.book
+#     worksheet = writer.sheets['by_SKU','by_product_category','by_brand_category','by_brand']
+#     format1 = workbook.add_format({'num_format': '0.00'}) 
+#     worksheet.set_column('A:A', None, format1)  
+#     writer.save()
+#     processed_data = output.getvalue()
+#     return processed_data
+# st.write(type(df_raw_))
+# df_out = extract_data(df_raw_)
+# st.download_button(label='📥 Download Current Result',
+#                                 data=df_out,
+#                                 file_name= 'website_template.xlsx')
+
