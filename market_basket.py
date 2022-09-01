@@ -482,10 +482,37 @@ itemsAll, rulesAll = find_rules(df_raw, 'id', s_segmentation, 2)
 selection = rulesAll.columns   
 
 with cG:
-    st.write(rulesAll)
+    filter_rules = st.expander('Filter rules', expanded =False)
+    with filter_rules:
+        a_list =  rulesAll['antecedents'].unique().tolist()
+        beta_multiselectA = st.container()
+        check_all = st.checkbox('Select all antecedents', value=False)
+        if check_all:
+            selected_antecedents = beta_multiselectA.multiselect('Included suppliers in table:',
+                                           options = a_list,
+                                           default = a_list)
+        else:
+            selected_antecedents = beta_multiselectA.multiselect('Included suppliers in table:',
+                                           options = a_list)
+        rulesAll = rulesAll.loc[rulesAll['antecedents'].isin(selected_antecedents)]
+        
+        c_list =  rulesAll['consequents'].unique().tolist()
+        beta_multiselectB = st.container()
+        check_all = st.checkbox('Select all consequents', value=False)
+        if check_all:
+            selected_consequents = beta_multiselectB.multiselect('Included suppliers in table:',
+                                           options = c_list,
+                                           default = c_list)
+        else:
+            selected_consequents = beta_multiselectB.multiselect('Included suppliers in table:',
+                                           options = c_list)
+        rulesAll = rulesAll.loc[rulesAll['consequents'].isin(selected_consequents)]    
     if len(rulesAll)>0:
-        heatmap_ac(rulesAll)
 
+        heatmap_ac(rulesAll)
+        show_rules = st.expander('Show all data', expanded =False)
+        with show_rules:
+            st.write(rulesAll.drop(columns = ['hover_name', 'antecedent', 'leverage', 'conviction']))
     else:
         st.markdown("""### No product associations have been established based on segment.""")
 
