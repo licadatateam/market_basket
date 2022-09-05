@@ -36,7 +36,7 @@ import plotly
 import math
 from itertools import cycle
 import streamlit as st
-from io import BytesIO
+#from io import BytesIO
 
 st.set_page_config(layout="wide",
                     page_title='Market Basket Analysis',
@@ -121,8 +121,8 @@ def bar_hist(df_test, seg, prob, cat = 'id'):
     ya_text = 'Count (units)'
   fig.update_yaxes(title_text = ya_text,showline=True, linewidth=1, linecolor='black', mirror=True, ticks ='inside',range = [0,df.max()*1.1])
   fig.update_xaxes(title_text = seg,showline=True, linewidth=1, linecolor='black', ticks ='',mirror=True,range = [-0.5,9.5], rangeslider=dict(visible=True),showticklabels=False)
-  st.plotly_chart(fig)
-  return df
+  
+  return df, fig
 
 def hist(df_test, is_prob = True, is_count = True, step = 1):
   df_data=pd.DataFrame()
@@ -158,7 +158,7 @@ def hist(df_test, is_prob = True, is_count = True, step = 1):
   fig.update_layout(template = 'simple_white',title_text= t_text + "("+ title_text+")" ,bargap=0.05)
   fig.update_yaxes(title_text = ya_text,showline=True, linewidth=1, linecolor='black', mirror=True, range = [0,df.max()*1.1] )#autorange = True
   fig.update_xaxes(title_text = x_title,showline=True, linewidth=1, linecolor='black', mirror=True,range = [0.5*step,(10.5)*step], rangeslider=dict(visible=True),showticklabels=True)
-  st.plotly_chart(fig)
+  return fig
 
 def df_to_plotly(df):
     return {'z': df.values.tolist(),
@@ -370,7 +370,7 @@ def matching_sequence(df_p, rules,input_list):
   if 'product_category' in available_sugg:
     product_category_sugg = corr_sugg[available_sugg.index('product_category')]
 
-  return SKU_sugg,brand_sugg,brand_category_sugg,product_category_sugg
+  return SKU_sugg,brand_sugg,brand_category_sugg,product_category_sugg,matching_df
 
 def scatter_explore():
   fig = go.Figure()
@@ -419,7 +419,7 @@ def exploration_data(df_raw):
 
 df_raw, df_product = gather_data()
 
-
+section = st.sidebar.selectbox('Select Section:', ('Market Basket Simulation','Data Exploration', 'Basket Budget', 'Product Association'))
 
 segments = ['Brand','Category','Category_Brand','SKU']
 segments_ = ['product_desc','brand','category_name','brand_category']
@@ -429,191 +429,226 @@ segment_dict = {'product_desc':'SKU',
                 'brand_category':'Category_Brand'}
 segment_dict_ = {v: k for k, v in segment_dict.items()}
 
-st.header('Data Exploration')
-cA, cB = st.columns([1,3])
-with cA:
-    st.markdown("#### Controls")
-    seg = st.selectbox('Select Segmentation', segments)
-    is_prob = st.radio("Data presentation: ", ('Probability','Actual Count'),  horizontal=True)
-    garage_type = st.sidebar.selectbox(
-        label = 'Select considered garages:',
-        options =('All','Rapide', 'Non-Rapide', 'Non-B2C', 'B2C'))
-    if garage_type =='Non-Rapide':
-      df_raw = df_raw.loc[df_raw['garage_type'] != 'rapide_service_center' ]
-    elif garage_type == 'Rapide':
-      df_raw = df_raw.loc[df_raw['garage_type'] == 'rapide_service_center' ]
-    elif garage_type == 'Non-B2C':
-      df_raw = df_raw.loc[~df_raw['garage_type'].isin(['rapide_service_center','Inactive'])]
-    elif garage_type == 'B2C':
-      df_raw = df_raw.loc[df_raw['garage_type']== 'Inactive']
-    if st.sidebar.button("Reset Data"):
-        st.experimental_memo.clear()
-        df_raw = pd.DataFrame()
-    df_raw_=df_raw.copy()
-with cB:
-    df_out_ = bar_hist(df_raw,segment_dict_[seg], is_prob=='Probability','id')
+garage_type = st.sidebar.selectbox(
+label = 'Select considered garages:',
+options =('All','Rapide', 'Non-Rapide', 'Non-B2C', 'B2C'))
+if st.sidebar.button("Reset Data"):
+    st.experimental_memo.clear()
+    df_raw = pd.DataFrame()
 
-cD, cE = st.columns([1,1])
-with cD:
-    count_step = st.number_input('Step for basket count:', 1, 100, 1)
-    hist(df_raw, is_prob=='Probability', True,step = count_step)
-with cE:
-    price_step = st.number_input('Step for basket price:', 100, 10000, 1000)
-    hist(df_raw, is_prob=='Probability', False,step = price_step)
-
-st.markdown("""#### Basket Budget""")   
-Ec, Fc, Gc = st.columns([1,5,1]) 
-with Fc:
-    df_explore = exploration_data(df_raw)
-
-    scatter_explore()
+if garage_type =='Non-Rapide':
+  df_raw = df_raw.loc[df_raw['garage_type'] != 'rapide_service_center' ]
+elif garage_type == 'Rapide':
+  df_raw = df_raw.loc[df_raw['garage_type'] == 'rapide_service_center' ]
+elif garage_type == 'Non-B2C':
+  df_raw = df_raw.loc[~df_raw['garage_type'].isin(['rapide_service_center','Inactive'])]
+elif garage_type == 'B2C':
+  df_raw = df_raw.loc[df_raw['garage_type']== 'Inactive']
 
 
+data_exploration = st.empty()
+with data_exploration.container():
+    
+    st.header('Data Exploration')
+    cA, cB = st.columns([1,3])
+    with cA:
+        st.markdown("#### Controls")
+        seg = st.selectbox('Select Segmentation', segments)
+        is_prob = st.radio("Data presentation: ", ('Probability','Actual Count'),  horizontal=True)
+        df_out_, fig_de = bar_hist(df_raw,segment_dict_[seg], is_prob=='Probability','id')     
+    with cB:
+        st.plotly_chart(fig_de)
+    cD, cE = st.columns([1,1])
+    with cD:
+        count_step = st.number_input('Step for basket count:', 1, 100, 1)
+        fig_count = hist(df_raw, is_prob=='Probability', True,step = count_step)
+        st.plotly_chart(fig_count)
+    with cE:
+        price_step = st.number_input('Step for basket price:', 100, 10000, 1000)
+        fig_price = hist(df_raw, is_prob=='Probability', False,step = price_step)
+        st.plotly_chart(fig_price)
+    df_out_ = df_out_.to_frame('count/probability')
+    st.markdown("""### Download data:""")
+    csv_save_ = convert_df(df_out_)
+    st.download_button(
+                        label="data_exploration.csv",
+                        data=csv_save_,
+                        file_name='data_exploration.csv',
+                        mime='text/csv'
+                        )
+    st.caption('Data for data exploration (Product segment vs. item count/probability).')
+if section != 'Data Exploration':
+     data_exploration.empty() 
+     
+basket_budget = st.empty()   
+with basket_budget.container():
+    st.markdown("""#### Basket Budget""")   
+    Ec, Fc, Gc = st.columns([1,5,1]) 
+    with Fc:
+        df_explore = exploration_data(df_raw)
+        scatter_explore()
+    st.markdown("""### Download data:""")
+    csv_save__ = convert_df(df_explore)
+    st.download_button(
+                        label="basket_budget.csv",
+                        data=csv_save__,
+                        file_name='basket_budget.csv',
+                        mime='text/csv'
+                        )
+    st.caption('Data for basket budget (Price vs. item count).')
+if section != 'Basket Budget':
+     basket_budget.empty()     
 
-st.header('Market Basket Association Analysis')
-cF, cG, cF2= st.columns([1,5,1])
-st.sidebar.markdown("""---""")
-st.sidebar.markdown("""Market Basket Analysis Controls""")
-segmentation = st.sidebar.selectbox('Select Segmentation:', segments)
-clean = st.sidebar.checkbox('Clean network plot ', value=False)
 
-s_segmentation = segment_dict_[segmentation]   
-itemsAll, rulesAll = find_rules(df_raw, 'id', s_segmentation, 2) 
-selection = rulesAll.columns   
-
-with cG:
-    filter_rules = st.expander('Filter rules', expanded =False)
-    with filter_rules:
-        a_list =  rulesAll['antecedents'].unique().tolist()
-        beta_multiselectA = st.container()
-        check_all = st.checkbox('Select all antecedents', value=False)
-        if check_all:
-            selected_antecedents = beta_multiselectA.multiselect('Included suppliers in table:',
-                                           options = a_list,
-                                           default = a_list)
-        else:
-            selected_antecedents = beta_multiselectA.multiselect('Included suppliers in table:',
-                                           options = a_list)
-        rulesAll = rulesAll.loc[rulesAll['antecedents'].isin(selected_antecedents)]
-        
-        c_list =  rulesAll['consequents'].unique().tolist()
-        beta_multiselectB = st.container()
-        check_all = st.checkbox('Select all consequents', value=False)
-        if check_all:
-            selected_consequents = beta_multiselectB.multiselect('Included suppliers in table:',
-                                           options = c_list,
-                                           default = c_list)
-        else:
-            selected_consequents = beta_multiselectB.multiselect('Included suppliers in table:',
-                                           options = c_list)
-        rulesAll = rulesAll.loc[rulesAll['consequents'].isin(selected_consequents)]    
-    if len(rulesAll)>0:
-
-        heatmap_ac(rulesAll)
-        show_rules = st.expander('Show all data', expanded =False)
-        with show_rules:
-            st.write(rulesAll.drop(columns = ['hover_name', 'antecedent', 'leverage', 'conviction']))
-    else:
-        st.markdown("""### No product associations have been established based on segment.""")
-
-set_vis = True
-segment = 'antecedent'
-cI, cJ = st.columns([1,1])
-with cI:
-    item_y = st.selectbox('y-axis', selection, index = 5)
-    item_x = st.selectbox('x-axis', selection, index = 4)
-    xy_scatter(rulesAll,segment, item_x,item_y, set_vis)
-with cJ:
-    filter_network = rulesAll['antecedents'].unique()
-    s_filter = item_x = st.selectbox('x-axis', filter_network, index = 0)
-    basket_network_plot(rulesAll.loc[rulesAll['antecedents']==s_filter], 'Category Association',clean) #.str.contains('NGK',na=False)
-
-AllRules = merged_rules(df_raw)
-cK, cL, cM = st.columns([3,5,3])
-with cL:
-    basket_network_plot(AllRules, 'Product Associations', clean)
-
-st.header("Market Basket Simulation")
-
-def show_metric(df):
-    if len(df)>0:
-        df = df.reset_index()
-        for sku in df['SKU']:
-            st.metric(label = df.columns[1],value = sku,delta = "Confidence: "+str(df.loc[df['SKU']==sku,'confidence'].item())+"%")
-    else:
-        st.caption('No suggestions for this section.')
-
-input_list = st.multiselect('Basket items:',options = df_product['product_desc'].unique())
-if len(input_list)> 0:
-    cs,cN,cO,cs = st.columns([1,3,7,1])
-    SKU_sugg, brand_sugg, brand_category_sugg, product_category_sugg=matching_sequence(df_product, AllRules,input_list)
-    with cN:
-        #st.write(pd.DataFrame(input_list,columns=['Item']).merge(df_product.iloc[:,:3], left_on ='Item', right_on='product_desc',how='inner').drop('product_desc', axis=1))
-        st.markdown("#### Selected Items:")
-        st.markdown("""---""")
-        for item in input_list:
-            st.markdown(f"""
-                        - **{item}**
-                        """)
-        st.markdown("""---""")
-    with cO:
-        t1, t2, t3, t4, t5 = st.tabs(["All","By SKU", "By Brand/Category", "By Product Category","By Brand"])
-        with t1:
-            st.markdown("""##### Suggestions based on SKU.""")
-            show_metric(SKU_sugg)
-            st.write("""---""")
-            st.markdown("""##### Suggestions based on brand/category.""")
-            show_metric(brand_category_sugg)
-            st.write("""---""")
-            st.markdown("""##### Suggestions based on product category.""")
-            show_metric(product_category_sugg)
-            st.write("""---""")
-            st.markdown("""##### Suggestions based on brand.""")
-            show_metric(brand_sugg)
-        with t2:
-            st.markdown("""##### Suggestions based on SKU.""")
-            st.write("""---""")
-            show_metric(SKU_sugg)
-        with t3:
-            st.markdown("""##### Suggestions based on brand/category.""")
-            st.write("""---""")
-            show_metric(brand_category_sugg)
-        with t4:
-            st.markdown("""##### Suggestions based on product category.""")
-            st.write("""---""")
-            show_metric(product_category_sugg)
-        with t5:
-            st.markdown("""##### Suggestions based on brand.""")
-            st.write("""---""")
-            show_metric(brand_sugg)
+association_analysis= st.empty()
+with association_analysis.container():
+    st.header('Market Basket Association Analysis')
+    cF, cG, cF2= st.columns([1,5,1])
+    st.sidebar.markdown("""---""")
+    st.sidebar.markdown("""Market Basket Analysis Controls""")
+    segmentation = st.sidebar.selectbox('Select Segmentation:', segments)
+    clean = st.sidebar.checkbox('Clean network plot ', value=False)
+    
+    s_segmentation = segment_dict_[segmentation]   
+    itemsAll, rulesAll = find_rules(df_raw, 'id', s_segmentation, 2) 
+    selection = rulesAll.columns   
+    
+    with cG:
+        filter_rules = st.expander('Filter rules', expanded =False)
+        with filter_rules:
+            a_list =  rulesAll['antecedents'].unique().tolist()
+            beta_multiselectA = st.container()
+            check_all = st.checkbox('Select all antecedents', value=True)
+            if check_all:
+                selected_antecedents = beta_multiselectA.multiselect('Included suppliers in table:',
+                                               options = a_list,
+                                               default = a_list)
+            else:
+                selected_antecedents = beta_multiselectA.multiselect('Included suppliers in table:',
+                                               options = a_list)
+            rulesAll = rulesAll.loc[rulesAll['antecedents'].isin(selected_antecedents)]
             
-else:
-    st.info('Start Shopping Now!')
+            c_list =  rulesAll['consequents'].unique().tolist()
+            beta_multiselectB = st.container()
+            check_all = st.checkbox('Select all consequents', value=True)
+            if check_all:
+                selected_consequents = beta_multiselectB.multiselect('Included suppliers in table:',
+                                               options = c_list,
+                                               default = c_list)
+            else:
+                selected_consequents = beta_multiselectB.multiselect('Included suppliers in table:',
+                                               options = c_list)
+            rulesAll = rulesAll.loc[rulesAll['consequents'].isin(selected_consequents)]    
+        if len(rulesAll)>0:
+    
+            heatmap_ac(rulesAll)
+            show_rules = st.expander('Show all data', expanded =False)
+            with show_rules:
+                st.write(rulesAll.drop(columns = ['hover_name', 'antecedent', 'leverage', 'conviction']))
+        else:
+            st.markdown("""### No product associations have been established based on segment.""")
+    
+    set_vis = True
+    segment = 'antecedent'
+    cI, cJ = st.columns([1,1])
+    with cI:
+        item_y = st.selectbox('y-axis', selection, index = 5)
+        item_x = st.selectbox('x-axis', selection, index = 4)
+        xy_scatter(rulesAll,segment, item_x,item_y, set_vis)
+    with cJ:
+        filter_network = rulesAll['antecedents'].unique()
+        s_filter = item_x = st.selectbox('x-axis', filter_network, index = 0)
+        basket_network_plot(rulesAll.loc[rulesAll['antecedents']==s_filter], 'Category Association',clean) #.str.contains('NGK',na=False)
+    
+    AllRules = merged_rules(df_raw)
+    cK, cL, cM = st.columns([3,5,3])
+    with cL:
+        basket_network_plot(AllRules, 'Product Associations', clean)
+    st.markdown("""### Download data:""")
+    csv_save = convert_df(rulesAll)
+    st.download_button(label="heatmap_data.csv",
+                        data=csv_save,
+                        file_name='heatmap_data.csv',
+                        mime='text/csv')
+    st.caption('Data for heatmap (Confidence of Antecedent vs. Consequent).')
+    st.markdown(""" --- """)
+    AllRules_ = convert_df(AllRules)
+    st.download_button(label="all_rules.csv",
+                        data=AllRules_,
+                        file_name='all_rules.csv',
+                        mime='text/csv')
+    st.caption('Data for the acquired association rules.')
+if section != 'Product Association':
+     association_analysis.empty()    
 
-df_out_ = df_out_.to_frame('count/probability')
-csv_save_ = convert_df(df_out_)
-st.sidebar.download_button(
-                    label="data_exploration.csv",
-                    data=csv_save_,
-                    file_name='data_exploration.csv',
-                    mime='text/csv'
-                    )
+simulation= st.empty()
+with simulation.container():
+    st.header("Market Basket Simulation")
+    
+    def show_metric(df,seg, a):
+        if len(df)>0:
+            df = df.reset_index()
+            for sku in df['SKU']:
+                antecedent = a[seg].item()
+                consequent = df_product.loc[df_product['product_desc'] == sku][seg].item()
+                st.metric(label = antecedent+"\u2192" +consequent,value = sku,delta = "Confidence: "+str(df.loc[df['SKU']==sku,'confidence'].item())+"%")
+        else:
+            st.caption('No suggestions for this section.')
+    
+    input_list = st.multiselect('Basket items:',options = df_product['product_desc'].unique())
+    if len(input_list)> 0:
+        cs,cN,cO,cs = st.columns([1,3,7,1])
+        SKU_sugg, brand_sugg, brand_category_sugg, product_category_sugg,list_summary=matching_sequence(df_product, AllRules,input_list)
+        with cN:
+            #st.write(pd.DataFrame(input_list,columns=['Item']).merge(df_product.iloc[:,:3], left_on ='Item', right_on='product_desc',how='inner').drop('product_desc', axis=1))
+            st.markdown("#### Selected Items:")
+            st.markdown("""---""")
+            for item in input_list:
+                st.markdown(f"""
+                            - **{item}**
+                            """)
+            st.markdown("""---""")
+        with cO:
+            t1, t2, t3, t4, t5 = st.tabs(["All","By SKU", "By Brand/Category", "By Product Category","By Brand"])
+            with t1:
+                st.markdown("""##### Suggestions based on SKU.""")
+                show_metric(SKU_sugg,'product_desc',list_summary)
+                st.write("""---""")
+                st.markdown("""##### Suggestions based on brand/category.""")
+                show_metric(brand_category_sugg,'brand_category',list_summary)
+                st.write("""---""")
+                st.markdown("""##### Suggestions based on product category.""")
+                show_metric(product_category_sugg,'product_category',list_summary)
+                st.write("""---""")
+                st.markdown("""##### Suggestions based on brand.""")
+                show_metric(brand_sugg,'brand',list_summary)
+            with t2:
+                st.markdown("""##### Suggestions based on SKU.""")
+                st.write("""---""")
+                show_metric(SKU_sugg,'product_desc',list_summary)
+            with t3:
+                st.markdown("""##### Suggestions based on brand/category.""")
+                st.write("""---""")
+                show_metric(brand_category_sugg,'brand_category',list_summary)
+            with t4:
+                st.markdown("""##### Suggestions based on product category.""")
+                st.write("""---""")
+                show_metric(product_category_sugg,'product_category',list_summary)
+            with t5:
+                st.markdown("""##### Suggestions based on brand.""")
+                st.write("""---""")
+                show_metric(brand_sugg,'brand',list_summary)
+        
+    else:
+        st.info('Start Shopping Now!')
+if section != 'Market Basket Simulation':
+    simulation.empty()
 
-csv_save__ = convert_df(df_explore)
-st.sidebar.download_button(
-                    label="basket_budget.csv",
-                    data=csv_save__,
-                    file_name='basket_budget.csv',
-                    mime='text/csv'
-                    )
 
-csv_save = convert_df(rulesAll)
-st.sidebar.download_button(
-                    label="heatmap_data.csv",
-                    data=csv_save,
-                    file_name='heatmap_data.csv',
-                    mime='text/csv'
-                    )
+
+
+
+
 
 # st.header("Download data")
 # def extract_data(df):
