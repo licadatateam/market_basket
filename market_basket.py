@@ -594,7 +594,7 @@ with simulation.container():
                 st.metric(label = antecedent+"\u2192" +consequent,value = sku,delta = "Confidence: "+str(df.loc[df['SKU']==sku,'confidence'].item())+"%")
         else:
             st.caption('No suggestions for this section.')
-    
+    df_product = df_product.sort_values(by = 'percentage', ascending = False)
     input_list = st.multiselect('Basket items:',options = df_product['product_desc'].unique())
     if len(input_list)> 0:
         cs,cN,cO,cs = st.columns([1,3,7,1])
